@@ -1,0 +1,23 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Output files (MP3s and text summaries are transient)
+out/*.mp3
+out/*.txt
+
+# State is committed intentionally — only ignore local overrides
+# state/seen.json is tracked
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

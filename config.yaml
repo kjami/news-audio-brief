@@ -1,0 +1,51 @@
+feeds:
+  world:
+    - name: Guardian World
+      url: https://www.theguardian.com/world/rss
+      lang: en
+      max_articles: 4
+
+  canada:
+    - name: CBC Top Stories
+      url: https://www.cbc.ca/cmlink/rss-topstories
+      lang: en
+      max_articles: 4
+
+  india_telugu:
+    - name: BBC Telugu
+      url: https://feeds.bbci.co.uk/telugu/rss.xml
+      lang: te
+      max_articles: 4
+    - name: Andhra Jyothy
+      url: https://andhrajyothy.com/rss/feed.xml
+      lang: te
+      max_articles: 4
+
+  cricket:
+    - name: ESPNCricinfo
+      url: https://www.espncricinfo.com/rss/content/story/feeds/0.xml
+      lang: en
+      max_articles: 5
+
+summary:
+  target_words: 750
+  provider: gemini       # "gemini" or "anthropic"
+  gemini:
+    model: gemini-2.5-flash
+  anthropic:
+    model: claude-sonnet-4-6
+
+tts:
+  provider: google       # "google" or "openai"
+  google:
+    language_code: en-US
+    voice: en-US-Neural2-F   # natural female; see cloud.google.com/text-to-speech/docs/voices
+  openai:
+    model: tts-1
+    voice: alloy
+
+delivery:
+  notifier: whatsapp     # or "email"
+
+state_dir: state
+output_dir: out

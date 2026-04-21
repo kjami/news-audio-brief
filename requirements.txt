@@ -1,0 +1,15 @@
+feedparser==6.0.11
+httpx==0.27.2
+trafilatura==1.12.2
+google-genai==0.8.0
+google-cloud-texttospeech==2.21.1
+google-api-python-client==2.154.0
+google-auth==2.36.0
+PyYAML==6.0.2
+python-dotenv==1.0.1
+pydub==0.25.1
+twilio==9.3.7
+
+# Optional fallback providers (keep installed so config switches work)
+anthropic==0.40.0
+openai==1.54.4
