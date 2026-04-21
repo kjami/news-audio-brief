@@ -21,3 +21,4 @@ out/*.txt
 # IDE
 .vscode/
 .idea/
+.claude/
