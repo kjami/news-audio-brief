@@ -3,29 +3,29 @@ feeds:
     - name: Guardian World
       url: https://www.theguardian.com/world/rss
       lang: en
-      max_articles: 4
+      max_articles: 2
 
   canada:
     - name: CBC Top Stories
       url: https://www.cbc.ca/cmlink/rss-topstories
       lang: en
-      max_articles: 4
+      max_articles: 2
 
   india_telugu:
     - name: BBC Telugu
       url: https://feeds.bbci.co.uk/telugu/rss.xml
       lang: te
-      max_articles: 4
+      max_articles: 2
     - name: Andhra Jyothy
       url: https://andhrajyothy.com/rss/feed.xml
       lang: te
-      max_articles: 4
+      max_articles: 1
 
   cricket:
     - name: ESPNCricinfo
       url: https://www.espncricinfo.com/rss/content/story/feeds/0.xml
       lang: en
-      max_articles: 5
+      max_articles: 2
 
 summary:
   target_words: 750
