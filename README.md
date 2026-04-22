@@ -1,6 +1,6 @@
 # Daily Audio News Brief
 
-A Python automation that runs every morning on GitHub Actions, pulls the latest articles from a fixed list of RSS feeds (English + Telugu), asks Claude to produce a single English audio-friendly summary, converts it to an MP3 with OpenAI TTS, uploads the file to Google Drive (replacing yesterday's), and sends the share link to WhatsApp (or email).
+A Python automation that runs every morning on GitHub Actions, pulls the latest articles from a fixed list of RSS feeds (English + Telugu), asks Gemini to produce a single English audio-friendly summary, converts it to an MP3 with Google Cloud TTS, uploads the file to Google Cloud Storage (replacing yesterday's), and sends the public link to WhatsApp (or email).
 
 Runs in about 1–2 minutes per day. Delivers ~5 minutes of audio.
 
@@ -12,8 +12,8 @@ Runs in about 1–2 minutes per day. Delivers ~5 minutes of audio.
 2. Deduplicates against `state/seen.json` (URLs from the last 7 days)
 3. Sends everything new to Claude in a single API call — Telugu content is translated to English as part of the summary
 4. Converts the summary to an MP3 via OpenAI TTS (chunking at 4096 chars if needed)
-5. Uploads to a specific Google Drive folder, deletes yesterday's file, makes today's shareable
-6. Sends the share link via WhatsApp (Twilio) or email (SMTP)
+5. Uploads to a public-read Google Cloud Storage bucket, deleting yesterday's file
+6. Sends the public link via WhatsApp (Twilio) or email (SMTP)
 
 ---
 
@@ -24,22 +24,31 @@ Runs in about 1–2 minutes per day. Delivers ~5 minutes of audio.
 | Service | What you need | Where |
 |---|---|---|
 | Google Gemini | API key (free tier) | https://aistudio.google.com/app/apikey |
-| Google Cloud | Service account JSON with Drive API + Cloud Text-to-Speech API enabled | https://cloud.google.com/iam/docs/service-accounts-create |
+| Google Cloud | Service account JSON + Cloud Text-to-Speech API + Cloud Storage API enabled | https://cloud.google.com/iam/docs/service-accounts-create |
 | Twilio | Account SID + Auth Token + WhatsApp sandbox | https://www.twilio.com/docs/whatsapp/sandbox |
 | Anthropic | *(optional)* API key — only if you switch `summary.provider` to `anthropic` | https://console.anthropic.com/settings/keys |
 | OpenAI | *(optional)* API key — only if you switch `tts.provider` to `openai` | https://platform.openai.com/api-keys |
 
-### 2. Google Cloud project (Drive + TTS)
+### 2. Google Cloud project (TTS + Storage)
 
-The service account does double duty: Drive upload **and** Cloud Text-to-Speech. Set them up once:
+The service account does double duty: Cloud Text-to-Speech **and** Cloud Storage upload. Set them up once:
 
-1. Create a folder in your Drive — anywhere is fine. Open it; the URL ends in `/folders/<FOLDER_ID>` — that's your `GDRIVE_FOLDER_ID`
-2. In Google Cloud Console, enable **both**:
-   - [Google Drive API](https://console.cloud.google.com/apis/library/drive.googleapis.com)
+1. In Google Cloud Console, enable **all three**:
    - [Cloud Text-to-Speech API](https://console.cloud.google.com/apis/library/texttospeech.googleapis.com)
-3. Create a service account, download its JSON key, grab the `client_email` from the JSON
-4. **Share the Drive folder with that `client_email`, granting Editor access** — without this step the upload will 404
-5. The TTS API uses the same service account — no extra sharing needed, just ensure the API is enabled on the project
+   - [Cloud Storage API](https://console.cloud.google.com/apis/library/storage-component.googleapis.com)
+   - Billing on the project (required for free-tier GCS usage — no charges at our volume, but the card has to be on file)
+2. Create a service account (IAM & Admin → Service Accounts), download its JSON key
+3. Create a Cloud Storage bucket (default region is fine, default class Standard). That bucket name is your `GCS_BUCKET`
+4. On the bucket, grant the service account role **Storage Object Admin** (IAM tab of the bucket → Grant access)
+5. Make the bucket **publicly readable** so Twilio and your phone can fetch the MP3:
+   - Bucket → Permissions → Grant access
+   - Principal: `allUsers`
+   - Role: **Storage Object Viewer**
+   - Save — Google will warn this makes contents public; confirm
+
+> Don't want the bucket to be world-readable? Switch to signed URLs (one-line change in `brief/upload.py` — use `blob.generate_signed_url(expiration=timedelta(hours=24))` instead of the deterministic URL). The default code path uses the simpler public-read approach.
+
+**Why not Google Drive?** Service accounts have zero personal Drive storage quota, so Drive uploads fail with `storageQuotaExceeded` on personal Google accounts. GCS uses the project's own storage quota, which works cleanly with service accounts.
 
 ### 3. Twilio WhatsApp
 
@@ -83,7 +92,7 @@ Add each env var from `.env.example` as a **repository secret** at Settings → 
 Required (default stack):
 - `GEMINI_API_KEY`
 - `GOOGLE_SERVICE_ACCOUNT_JSON` — paste the full contents of the service account JSON file
-- `GDRIVE_FOLDER_ID`
+- `GCS_BUCKET`
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_WHATSAPP_TO`
 
 Optional:
@@ -115,7 +124,11 @@ The summarization prompt lives in `prompts/summary_prompt.txt` — iterate on it
 
 **Twilio WhatsApp messages never arrive.** You must send the sandbox `join <code>` message from your phone before Twilio will deliver anything. If your number hasn't opted in, the Twilio API returns `success` but no message reaches your phone. Re-opt-in after 72 hours of inactivity.
 
-**Drive upload fails with `File not found`.** The service account email doesn't have access to the folder. Open the folder in the Drive UI → Share → add the service account's `client_email` (ends in `.iam.gserviceaccount.com`) → give it **Editor**.
+**GCS upload fails with `403 Forbidden`.** The service account doesn't have write access to the bucket. In Cloud Console → Cloud Storage → your bucket → Permissions → Grant access → add the service account's `client_email` with role **Storage Object Admin**.
+
+**Generated URL returns `AccessDenied` when you tap it.** The bucket isn't publicly readable. Go to the bucket → Permissions → Grant access → principal `allUsers`, role **Storage Object Viewer**.
+
+**GCS upload fails with `The project to be billed is associated with an absent billing account`.** Billing isn't enabled on the Cloud project. Enable it in Cloud Console → Billing (no charges at our usage, but a card has to be on file).
 
 ---
 
@@ -125,7 +138,7 @@ The summarization prompt lives in `prompts/summary_prompt.txt` — iterate on it
 |---|---|
 | Gemini 2.5 Flash (AI Studio free tier — well under the rate/quota limits for 1 call/day) | $0 |
 | Google Cloud TTS (Neural2 voice, ~150k chars/mo — free tier covers 1M chars/mo standard, 4M chars/mo WaveNet) | $0 |
-| Google Drive | $0 |
+| Google Cloud Storage (~60 MB-months + ~60 MB egress; free tier is 5 GB-months + 1 GB egress) | $0 |
 | Twilio WhatsApp (sandbox) | $0 |
 | GitHub Actions (public repo, or ~1 min on private) | $0 |
 | **Total** | **$0** |

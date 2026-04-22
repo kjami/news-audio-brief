@@ -1,17 +1,22 @@
 """
-Slice 5 — upload today's MP3 to Google Drive and delete yesterday's.
+Upload today's MP3 to a Google Cloud Storage bucket and delete yesterday's.
 
-Auth: service account JSON passed via env var GOOGLE_SERVICE_ACCOUNT_JSON
-(the full JSON content as a single string). The folder to upload into is
-identified by env var GDRIVE_FOLDER_ID. The service account email must have
-been granted Editor access to that folder — see the README.
+Auth: reuses the same GOOGLE_SERVICE_ACCOUNT_JSON as Gemini TTS (one service
+account for the whole pipeline). The bucket name comes from env var
+GCS_BUCKET. Enable the Cloud Storage API on the project and grant the
+service account the "Storage Object Admin" role on the bucket.
+
+Why GCS instead of Drive: Drive service-account uploads fail with
+'storageQuotaExceeded' on personal Google accounts because service accounts
+have no personal Drive quota. GCS uses the project's own storage quota
+(free tier covers 5 GB-months — we use ~60 MB-months), so the same
+service account works without any ownership-delegation dance.
 
 Workflow:
-  1. List files in the folder matching brief-*.mp3
+  1. List blobs in the bucket with prefix 'brief-'
   2. Delete any whose name isn't today's (brief-YYYY-MM-DD.mp3)
   3. Upload today's MP3
-  4. Set a public "anyone with link can view" permission
-  5. Return the webViewLink share URL
+  4. Return the public URL (bucket must have allUsers:objectViewer)
 """
 
 from __future__ import annotations
@@ -24,17 +29,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 
 log = logging.getLogger(__name__)
 
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
 FILE_PREFIX = "brief-"
 FILE_SUFFIX = ".mp3"
+GCS_SCOPES = ["https://www.googleapis.com/auth/devstorage.read_write"]
 
 
-def _build_drive_client():
+def _build_storage_client():
     raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not raw:
         raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON is not set")
@@ -43,41 +46,33 @@ def _build_drive_client():
     except json.JSONDecodeError as e:
         raise RuntimeError(f"GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {e}")
 
+    # Lazy import so the SDK is only loaded when this module actually runs
+    from google.cloud import storage
+
     creds = service_account.Credentials.from_service_account_info(
-        info, scopes=DRIVE_SCOPES
+        info, scopes=GCS_SCOPES,
     )
-    return build("drive", "v3", credentials=creds, cache_discovery=False)
+    return storage.Client(credentials=creds, project=info.get("project_id"))
 
 
-def _cleanup_old_briefs(service, folder_id: str, today_name: str) -> int:
-    """Delete any brief-*.mp3 in the folder whose name != today_name."""
-    query = (
-        f"'{folder_id}' in parents and trashed = false and "
-        f"name contains '{FILE_PREFIX}' and mimeType = 'audio/mpeg'"
-    )
-    resp = service.files().list(
-        q=query,
-        fields="files(id, name)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True,
-    ).execute()
-    files = resp.get("files", [])
-
+def _cleanup_old_briefs(bucket, today_name: str) -> int:
+    """Delete any brief-*.mp3 in the bucket whose name != today_name."""
     deleted = 0
-    for f in files:
-        name = f["name"]
-        if not (name.startswith(FILE_PREFIX) and name.endswith(FILE_SUFFIX)):
+    for blob in bucket.list_blobs(prefix=FILE_PREFIX):
+        name = blob.name
+        if not name.endswith(FILE_SUFFIX):
             continue
         if name == today_name:
-            log.info("  Found today's brief already in Drive: %s (will be replaced)", name)
+            log.info("  Found today's brief already in bucket: %s (will be replaced)",
+                     name)
             try:
-                service.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+                blob.delete()
                 deleted += 1
             except Exception as e:
                 log.warning("  Failed to delete existing %s: %s", name, e)
             continue
         try:
-            service.files().delete(fileId=f["id"], supportsAllDrives=True).execute()
+            blob.delete()
             log.info("  Deleted old brief: %s", name)
             deleted += 1
         except Exception as e:
@@ -85,20 +80,17 @@ def _cleanup_old_briefs(service, folder_id: str, today_name: str) -> int:
     return deleted
 
 
-def _upload_file(service, folder_id: str, local_path: Path) -> dict:
-    """Upload with one retry. Returns the created file resource."""
-    metadata = {"name": local_path.name, "parents": [folder_id]}
+def _upload_blob(bucket, local_path: Path) -> str:
+    """Upload with one retry. Returns the public URL."""
     last_err: Exception | None = None
     for attempt in (1, 2):
         try:
-            media = MediaFileUpload(str(local_path), mimetype="audio/mpeg",
-                                    resumable=False)
-            return service.files().create(
-                body=metadata,
-                media_body=media,
-                fields="id, name, webViewLink",
-                supportsAllDrives=True,
-            ).execute()
+            blob = bucket.blob(local_path.name)
+            blob.content_type = "audio/mpeg"
+            blob.upload_from_filename(str(local_path))
+            # Deterministic public URL — works when bucket has
+            # allUsers:objectViewer IAM binding
+            return f"https://storage.googleapis.com/{bucket.name}/{local_path.name}"
         except Exception as e:
             last_err = e
             if attempt == 1:
@@ -110,48 +102,34 @@ def _upload_file(service, folder_id: str, local_path: Path) -> dict:
     raise RuntimeError(f"Upload failed: {last_err}")
 
 
-def _make_shareable(service, file_id: str) -> None:
-    service.permissions().create(
-        fileId=file_id,
-        body={"role": "reader", "type": "anyone"},
-        supportsAllDrives=True,
-    ).execute()
-
-
 def run(mp3_path: Path, config: dict) -> str:
     """
-    Upload mp3_path to Drive, delete any other brief-*.mp3 in the folder,
-    return the share URL.
+    Upload mp3_path to the configured GCS bucket, delete any other
+    brief-*.mp3 in the bucket, and return the public URL.
     """
     mp3_path = Path(mp3_path)
     if not mp3_path.exists():
         raise FileNotFoundError(f"MP3 not found: {mp3_path}")
 
-    folder_id = os.environ.get("GDRIVE_FOLDER_ID")
-    if not folder_id:
-        raise RuntimeError("GDRIVE_FOLDER_ID is not set")
+    bucket_name = os.environ.get("GCS_BUCKET")
+    if not bucket_name:
+        raise RuntimeError("GCS_BUCKET is not set")
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_name = f"{FILE_PREFIX}{today}{FILE_SUFFIX}"
 
-    log.info("Drive: authenticating service account")
-    service = _build_drive_client()
+    log.info("GCS: authenticating service account")
+    client = _build_storage_client()
+    bucket = client.bucket(bucket_name)
 
-    log.info("Drive: cleaning up previous briefs in folder %s", folder_id)
-    n_deleted = _cleanup_old_briefs(service, folder_id, today_name)
-    log.info("  %d old file(s) deleted", n_deleted)
+    log.info("GCS: cleaning up previous briefs in bucket %s", bucket_name)
+    n_deleted = _cleanup_old_briefs(bucket, today_name)
+    log.info("  %d old object(s) deleted", n_deleted)
 
-    log.info("Drive: uploading %s (%.1f KB)",
+    log.info("GCS: uploading %s (%.1f KB)",
              mp3_path.name, mp3_path.stat().st_size / 1024)
-    uploaded = _upload_file(service, folder_id, mp3_path)
-    file_id = uploaded["id"]
-    log.info("  Upload complete, file id = %s", file_id)
+    public_url = _upload_blob(bucket, mp3_path)
+    log.info("  Upload complete")
 
-    log.info("Drive: setting anyone-with-link permission")
-    _make_shareable(service, file_id)
-
-    share_url = uploaded.get("webViewLink") or (
-        f"https://drive.google.com/file/d/{file_id}/view"
-    )
-    log.info("Share URL: %s", share_url)
-    return share_url
+    log.info("Public URL: %s", public_url)
+    return public_url
