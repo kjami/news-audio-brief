@@ -150,9 +150,14 @@ def run(articles: list[Article], config: dict) -> str:
     log.info("Summarize: provider=%s model=%s articles=%d prompt=%d chars",
              config["summary"]["provider"], model, len(articles), len(prompt))
 
+    # Summary retry: up to 3 attempts with a 30s wait between them.
+    # The free Gemini tier returns 503 "high demand" during spikes that
+    # typically clear in under a minute, so a short 2s retry is not enough.
     last_err: Exception | None = None
     text: str | None = None
-    for attempt in (1, 2):
+    max_attempts = 3
+    retry_wait_s = 30
+    for attempt in range(1, max_attempts + 1):
         try:
             t0 = time.time()
             text = summarizer.generate(prompt)
@@ -161,11 +166,13 @@ def run(articles: list[Article], config: dict) -> str:
             break
         except Exception as e:
             last_err = e
-            if attempt == 1:
-                log.warning("Summary call failed (attempt 1): %s — retrying", e)
-                time.sleep(2)
+            if attempt < max_attempts:
+                log.warning("Summary call failed (attempt %d/%d): %s — "
+                            "retrying in %ds", attempt, max_attempts, e, retry_wait_s)
+                time.sleep(retry_wait_s)
             else:
-                log.error("Summary call failed (attempt 2): %s", e)
+                log.error("Summary call failed (attempt %d/%d): %s",
+                          attempt, max_attempts, e)
                 raise
 
     assert text is not None, last_err  # loop guarantees this
