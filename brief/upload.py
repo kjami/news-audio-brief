@@ -16,7 +16,7 @@ Workflow:
   1. List blobs in the bucket with prefix 'brief-'
   2. Delete any whose name isn't today's (brief-YYYY-MM-DD.mp3)
   3. Upload today's MP3
-  4. Return the public URL (bucket must have allUsers:objectViewer)
+  4. Return a 24-hour v4 signed URL (bucket stays private)
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from google.oauth2 import service_account
@@ -80,17 +80,26 @@ def _cleanup_old_briefs(bucket, today_name: str) -> int:
     return deleted
 
 
+SIGNED_URL_TTL_HOURS = 24
+
+
 def _upload_blob(bucket, local_path: Path) -> str:
-    """Upload with one retry. Returns the public URL."""
+    """Upload with one retry. Returns a v4 signed URL valid for 24h."""
     last_err: Exception | None = None
     for attempt in (1, 2):
         try:
             blob = bucket.blob(local_path.name)
             blob.content_type = "audio/mpeg"
             blob.upload_from_filename(str(local_path))
-            # Deterministic public URL — works when bucket has
-            # allUsers:objectViewer IAM binding
-            return f"https://storage.googleapis.com/{bucket.name}/{local_path.name}"
+            # Signed URL — lets Twilio + phone fetch without making the
+            # bucket world-readable. Service account must have the
+            # iam.serviceAccountTokenCreator role on itself (or the key
+            # JSON must include a private_key, which it does by default).
+            return blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(hours=SIGNED_URL_TTL_HOURS),
+                method="GET",
+            )
         except Exception as e:
             last_err = e
             if attempt == 1:
