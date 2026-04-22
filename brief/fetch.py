@@ -212,7 +212,7 @@ def run(config: dict) -> list[Article]:
                 published = entry.get("published", "") or entry.get("updated", "")
                 text = _extract_article_text(entry, link)
 
-                if not text or len(text) < 100:
+                if not text or len(text) < 50:
                     log.warning("  Skipping %s — no usable text", link)
                     continue
 
