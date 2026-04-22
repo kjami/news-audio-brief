@@ -110,23 +110,27 @@ def _http_get(url: str, *, use_browser_ua: bool = False) -> httpx.Response | Non
     return None
 
 
-def _fetch_feed_bytes(url: str, lang: str) -> bytes | None:
+def _fetch_feed_bytes(url: str) -> bytes | None:
     """
-    Fetch raw feed bytes. For Telugu feeds, if the first attempt returns 403,
-    retry once with a browser UA.
+    Fetch raw feed bytes with one retry. Always uses a realistic browser UA
+    because some feeds (CBC, Andhra Jyothy) block the default python-httpx UA
+    at the TCP layer — CBC disconnects mid-response, others return 403.
     """
-    # First try: default UA
-    try:
-        r = httpx.get(url, timeout=HTTP_TIMEOUT, follow_redirects=True)
-        if r.status_code == 403 and lang == "te":
-            log.warning("Feed %s returned 403 — retrying with browser UA", url)
-            r = httpx.get(url, timeout=HTTP_TIMEOUT, follow_redirects=True,
-                          headers={"User-Agent": BROWSER_UA})
-        r.raise_for_status()
-        return r.content
-    except httpx.HTTPError as e:
-        log.error("Feed fetch failed for %s: %s", url, e)
-        return None
+    headers = {"User-Agent": BROWSER_UA}
+    for attempt in (1, 2):
+        try:
+            r = httpx.get(url, timeout=HTTP_TIMEOUT,
+                          follow_redirects=True, headers=headers)
+            r.raise_for_status()
+            return r.content
+        except httpx.HTTPError as e:
+            if attempt == 1:
+                log.warning("Feed fetch %s failed (attempt 1): %s — retrying",
+                            url, e)
+                time.sleep(1)
+            else:
+                log.error("Feed fetch failed for %s: %s", url, e)
+    return None
 
 
 # ----------------------------- article text --------------------------
@@ -180,7 +184,7 @@ def run(config: dict) -> list[Article]:
             max_n = feed_cfg["max_articles"]
 
             log.info("Fetching feed: %s (%s)", name, url)
-            raw = _fetch_feed_bytes(url, lang)
+            raw = _fetch_feed_bytes(url)
             if raw is None:
                 log.warning("Skipping feed %s — fetch failed", name)
                 continue
