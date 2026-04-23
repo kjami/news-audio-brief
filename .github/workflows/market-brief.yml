@@ -2,10 +2,10 @@ name: Daily Market Brief
 
 on:
   schedule:
-    # 21:30 UTC Mon–Fri = 5:30 PM Eastern (after US close at 4pm ET + 90 min
-    # for summary/wrap-up stories to land in RSS). Skips weekends since
-    # markets are closed and the feeds have little new content.
-    - cron: "30 21 * * 1-5"
+    # 13:00 UTC Mon–Fri = 9:00 AM Eastern (EDT) / 8:00 AM (EST) — ~30 min
+    # before US market open, so overnight + pre-market news is fresh.
+    # Skips weekends since markets are closed.
+    - cron: "0 13 * * 1-5"
   workflow_dispatch: {}
 
 jobs:
