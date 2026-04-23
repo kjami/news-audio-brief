@@ -23,30 +23,31 @@ from brief.fetch import Article
 
 log = logging.getLogger(__name__)
 
-PROMPT_PATH = Path("prompts/summary_prompt.txt")
+DEFAULT_PROMPT_PATH = Path("prompts/summary_prompt.txt")
 MAX_ARTICLE_CHARS = 4000  # truncate each article body so the prompt stays sane
 
-CATEGORY_LABELS = {
-    "world": "World",
-    "canada": "Canada",
-    "india_telugu": "India / Telugu states",
-    "cricket": "Cricket",
-}
+
+def _humanise(key: str) -> str:
+    return key.replace("_", " ").title()
 
 
 # --------------------------- prompt building ------------------------
 
-def _format_articles_block(articles: list[Article]) -> str:
+def _format_articles_block(articles: list[Article], labels: dict[str, str]) -> str:
     by_cat: dict[str, list[Article]] = {}
     for a in articles:
         by_cat.setdefault(a.category, []).append(a)
 
+    # Preserve the label order from the config where possible, then append
+    # any categories that appeared in articles but weren't listed.
+    ordered_cats = list(labels.keys()) + [c for c in by_cat if c not in labels]
+
     sections: list[str] = []
-    for cat in CATEGORY_LABELS:
+    for cat in ordered_cats:
         items = by_cat.get(cat, [])
         if not items:
             continue
-        label = CATEGORY_LABELS[cat]
+        label = labels.get(cat, _humanise(cat))
         lines = [f"### Category: {label}"]
         for i, a in enumerate(items, 1):
             body = a.text.strip().replace("\n\n", "\n")
@@ -64,9 +65,10 @@ def _format_articles_block(articles: list[Article]) -> str:
     return "\n\n".join(sections)
 
 
-def _build_prompt(articles: list[Article], target_words: int) -> str:
-    template = PROMPT_PATH.read_text()
-    articles_block = _format_articles_block(articles)
+def _build_prompt(articles: list[Article], target_words: int,
+                  prompt_path: Path, labels: dict[str, str]) -> str:
+    template = prompt_path.read_text()
+    articles_block = _format_articles_block(articles, labels)
     today = datetime.now(timezone.utc).strftime("%A, %B %d, %Y")
     return (
         template
@@ -145,7 +147,9 @@ def run(articles: list[Article], config: dict) -> str:
 
     target_words = config["summary"]["target_words"]
     summarizer, model = _build_summarizer(config)
-    prompt = _build_prompt(articles, target_words)
+    prompt_path = Path(config["summary"].get("prompt_file") or DEFAULT_PROMPT_PATH)
+    labels = config.get("category_labels") or {}
+    prompt = _build_prompt(articles, target_words, prompt_path, labels)
 
     log.info("Summarize: provider=%s model=%s articles=%d prompt=%d chars",
              config["summary"]["provider"], model, len(articles), len(prompt))
@@ -180,7 +184,9 @@ def run(articles: list[Article], config: dict) -> str:
     out_dir = Path(config["output_dir"])
     out_dir.mkdir(exist_ok=True)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    out_path = out_dir / f"summary-{today}.txt"
+    prefix = config.get("output", {}).get("file_prefix", "brief-")
+    # Use the same prefix as the MP3 so news/market summaries don't clobber.
+    out_path = out_dir / f"{prefix}summary-{today}.txt"
     out_path.write_text(text)
     log.info("Wrote summary to %s", out_path)
     return text

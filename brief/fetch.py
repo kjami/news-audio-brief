@@ -52,9 +52,9 @@ class Article:
 
 # ----------------------------- seen.json -----------------------------
 
-def _load_seen(state_dir: Path) -> dict[str, str]:
+def _load_seen(state_dir: Path, filename: str = "seen.json") -> dict[str, str]:
     """Return {url: iso_timestamp} of URLs seen in the last SEEN_WINDOW_DAYS."""
-    path = state_dir / "seen.json"
+    path = state_dir / filename
     if not path.exists():
         return {}
     try:
@@ -75,9 +75,9 @@ def _load_seen(state_dir: Path) -> dict[str, str]:
     return pruned
 
 
-def _save_seen(state_dir: Path, seen: dict[str, str]) -> None:
+def _save_seen(state_dir: Path, seen: dict[str, str], filename: str = "seen.json") -> None:
     state_dir.mkdir(exist_ok=True)
-    path = state_dir / "seen.json"
+    path = state_dir / filename
     path.write_text(json.dumps(seen, indent=2, sort_keys=True))
 
 
@@ -169,7 +169,8 @@ def run(config: dict) -> list[Article]:
     Updates seen.json with all URLs encountered this run.
     """
     state_dir = Path(config["state_dir"])
-    seen = _load_seen(state_dir)
+    seen_filename = config.get("output", {}).get("seen_filename", "seen.json")
+    seen = _load_seen(state_dir, seen_filename)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     new_articles: list[Article] = []
@@ -228,7 +229,7 @@ def run(config: dict) -> list[Article]:
                 seen[link] = now_iso
                 log.info("  + [%s] %s", lang, title[:80])
 
-    _save_seen(state_dir, seen)
+    _save_seen(state_dir, seen, seen_filename)
 
     log.info("Fetch summary: %d entries scanned, %d already seen, %d new articles",
              total_seen, total_skipped, len(new_articles))

@@ -171,7 +171,8 @@ def run(summary_text: str, config: dict) -> Path:
     out_dir = Path(config["output_dir"])
     out_dir.mkdir(exist_ok=True)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    final_path = out_dir / f"brief-{today}.mp3"
+    prefix = config.get("output", {}).get("file_prefix", "brief-")
+    final_path = out_dir / f"{prefix}{today}.mp3"
 
     chunks = _split_into_chunks(summary_text)
     log.info("TTS: %d chars -> %d chunk(s), provider=%s",

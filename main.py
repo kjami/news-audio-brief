@@ -1,8 +1,13 @@
 """
 Daily Audio News Brief — entry point.
 Orchestrates the pipeline: fetch → summarize → tts → upload → notify.
+
+Usage:
+    python main.py                          # uses config.yaml
+    python main.py --config config-market.yaml
 """
 
+import argparse
 import logging
 import sys
 from pathlib import Path
@@ -44,18 +49,32 @@ def print_feed_summary(config: dict) -> None:
             )
 
 
-def main() -> None:
-    log.info("=== Daily Audio News Brief starting ===")
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Daily audio brief pipeline")
+    p.add_argument(
+        "--config", "-c", default="config.yaml",
+        help="Path to config YAML (default: config.yaml)",
+    )
+    return p.parse_args()
 
-    config = load_config()
+
+def main() -> None:
+    args = parse_args()
+    log.info("=== Daily Audio Brief starting (config=%s) ===", args.config)
+
+    config = load_config(args.config)
+    # Make config path available to later stages (e.g. to derive default
+    # seen.json filenames per-config).
+    config.setdefault("_config_path", args.config)
     print_feed_summary(config)
 
     # Ensure output and state directories exist
     Path(config["output_dir"]).mkdir(exist_ok=True)
     Path(config["state_dir"]).mkdir(exist_ok=True)
 
-    log.info("Output dir : %s", config["output_dir"])
-    log.info("State dir  : %s", config["state_dir"])
+    log.info("Output dir  : %s", config["output_dir"])
+    log.info("State dir   : %s", config["state_dir"])
+    log.info("File prefix : %s", config.get("output", {}).get("file_prefix", "brief-"))
     summary_provider = config["summary"]["provider"]
     tts_provider = config["tts"]["provider"]
     log.info("Summary  : %s (%s)", summary_provider,
@@ -83,7 +102,7 @@ def main() -> None:
     # --- Slice 5: upload + notify ---
     from brief import upload, notify
     share_url = upload.run(mp3_path, config)
-    notify.run(share_url, config)
+    notify.run(share_url, summary_text, config)
 
     log.info("=== Daily brief complete: %s ===", share_url)
 

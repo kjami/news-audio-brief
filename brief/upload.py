@@ -32,7 +32,7 @@ from google.oauth2 import service_account
 
 log = logging.getLogger(__name__)
 
-FILE_PREFIX = "brief-"
+DEFAULT_FILE_PREFIX = "brief-"
 FILE_SUFFIX = ".mp3"
 GCS_SCOPES = ["https://www.googleapis.com/auth/devstorage.read_write"]
 
@@ -55,10 +55,10 @@ def _build_storage_client():
     return storage.Client(credentials=creds, project=info.get("project_id"))
 
 
-def _cleanup_old_briefs(bucket, today_name: str) -> int:
-    """Delete any brief-*.mp3 in the bucket whose name != today_name."""
+def _cleanup_old_briefs(bucket, today_name: str, file_prefix: str) -> int:
+    """Delete any <prefix>*.mp3 in the bucket whose name != today_name."""
     deleted = 0
-    for blob in bucket.list_blobs(prefix=FILE_PREFIX):
+    for blob in bucket.list_blobs(prefix=file_prefix):
         name = blob.name
         if not name.endswith(FILE_SUFFIX):
             continue
@@ -124,15 +124,17 @@ def run(mp3_path: Path, config: dict) -> str:
     if not bucket_name:
         raise RuntimeError("GCS_BUCKET is not set")
 
+    file_prefix = config.get("output", {}).get("file_prefix", DEFAULT_FILE_PREFIX)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    today_name = f"{FILE_PREFIX}{today}{FILE_SUFFIX}"
+    today_name = f"{file_prefix}{today}{FILE_SUFFIX}"
 
     log.info("GCS: authenticating service account")
     client = _build_storage_client()
     bucket = client.bucket(bucket_name)
 
-    log.info("GCS: cleaning up previous briefs in bucket %s", bucket_name)
-    n_deleted = _cleanup_old_briefs(bucket, today_name)
+    log.info("GCS: cleaning up previous briefs (prefix=%s) in bucket %s",
+             file_prefix, bucket_name)
+    n_deleted = _cleanup_old_briefs(bucket, today_name, file_prefix)
     log.info("  %d old object(s) deleted", n_deleted)
 
     log.info("GCS: uploading %s (%.1f KB)",

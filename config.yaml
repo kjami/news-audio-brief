@@ -27,9 +27,18 @@ feeds:
       lang: en
       max_articles: 2
 
+# Human-readable labels shown to the LLM for each feed category.
+# Any category key missing here falls back to a humanised version of the key.
+category_labels:
+  world: World
+  canada: Canada
+  india_telugu: India / Telugu states
+  cricket: Cricket
+
 summary:
   target_words: 750
   provider: gemini       # "gemini" or "anthropic"
+  prompt_file: prompts/summary_prompt.txt
   gemini:
     model: gemini-2.5-flash
   anthropic:
@@ -46,6 +55,12 @@ tts:
 
 delivery:
   notifier: whatsapp     # or "email"
+  title: Daily audio news brief
+  send_text: true        # also send the full summary text after the audio
+
+output:
+  file_prefix: brief-           # used for MP3 filename and GCS cleanup
+  seen_filename: seen.json      # under state_dir
 
 state_dir: state
 output_dir: out

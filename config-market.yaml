@@ -1,0 +1,78 @@
+# Market brief — daily rundown focused on VEQT (Vanguard all-equity global)
+# and VFV (Vanguard S&P 500 CAD-unhedged). See config.yaml for the news brief.
+
+feeds:
+  canada_markets:
+    - name: Financial Post
+      url: https://financialpost.com/feed
+      lang: en
+      max_articles: 2
+    - name: BNN Bloomberg
+      url: https://www.bnnbloomberg.ca/rss.xml
+      lang: en
+      max_articles: 2
+
+  us_markets:
+    - name: MarketWatch Top Stories
+      url: https://feeds.content.dowjones.io/public/rss/mw_topstories
+      lang: en
+      max_articles: 2
+    - name: CNBC Top News
+      url: https://search.cnbc.com/rs/search/combinedcd.xml?partnerId=wrss01&id=100003114
+      lang: en
+      max_articles: 2
+    - name: Yahoo Finance
+      url: https://finance.yahoo.com/news/rssindex
+      lang: en
+      max_articles: 2
+
+  etf_specific:
+    # Google News RSS searches — Vanguard Canada doesn't publish a usable
+    # feed, so we aggregate news that mentions the tickers by name.
+    - name: Google News - VEQT
+      url: https://news.google.com/rss/search?q=VEQT+ETF+Vanguard&hl=en-CA&gl=CA&ceid=CA:en
+      lang: en
+      max_articles: 2
+    - name: Google News - VFV
+      url: https://news.google.com/rss/search?q=VFV+ETF+Vanguard&hl=en-CA&gl=CA&ceid=CA:en
+      lang: en
+      max_articles: 2
+    - name: Google News - S&P 500 close
+      url: https://news.google.com/rss/search?q=%22S%26P+500%22+close&hl=en-CA&gl=CA&ceid=CA:en
+      lang: en
+      max_articles: 2
+
+category_labels:
+  canada_markets: Canadian markets
+  us_markets: US markets
+  etf_specific: VEQT / VFV / index
+
+summary:
+  target_words: 450            # ~3 minutes of audio
+  provider: gemini             # "gemini" or "anthropic"
+  prompt_file: prompts/market_prompt.txt
+  gemini:
+    model: gemini-2.5-flash
+  anthropic:
+    model: claude-sonnet-4-6
+
+tts:
+  provider: google             # "google" or "openai"
+  google:
+    language_code: en-US
+    voice: en-US-Neural2-D     # natural male — differentiates audibly from the news brief
+  openai:
+    model: tts-1
+    voice: onyx
+
+delivery:
+  notifier: whatsapp
+  title: Daily market brief
+  send_text: true
+
+output:
+  file_prefix: market-
+  seen_filename: seen-market.json
+
+state_dir: state
+output_dir: out
