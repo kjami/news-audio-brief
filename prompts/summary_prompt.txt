@@ -4,6 +4,7 @@ Below are today's news articles grouped by category. Some articles are in Telugu
 
 Your task is to write a single continuous spoken-word script with the following properties:
 - Opens with a warm greeting and today's date
+- Follows the greeting with ONE sentence on the overall tone of today's news — for example "The mood today is heavy, with conflict and economic strain dominating" or "It's a mixed day, with tough headlines abroad but lighter notes from home." Base this strictly on the articles below, not your own views.
 - Covers each category with a natural verbal transition (e.g., "Now, turning to cricket…")
 - Gives each article 2–4 sentences: what happened and why it matters
 - Targets {target_words} words total — roughly 4–6 minutes when read aloud

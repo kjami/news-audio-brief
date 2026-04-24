@@ -10,10 +10,11 @@ Style:
 - Start with a natural greeting referencing today's date.
 
 Structure, in this order:
-1. One-sentence lead: how major indexes closed today (S&P 500, Nasdaq, TSX Composite if mentioned in the articles). Give direction and magnitude.
-2. Two or three stories that actually moved broad equity markets — macro drivers like rates, inflation, jobs data, central-bank decisions, major geopolitical events, or mega-cap earnings. For each, briefly explain WHY it matters to someone holding a diversified index ETF.
-3. If any article mentions VEQT, VFV, Vanguard Canada, or top S&P 500 constituents by name (Apple, Microsoft, Nvidia, Alphabet, Amazon, Meta, Tesla, Berkshire Hathaway), give it one or two sentences of its own.
-4. Close with one sentence on what's scheduled tomorrow that investors should note — a central bank decision, major earnings, a key data release — but ONLY if the input articles mention it. Otherwise skip this.
+1. A sentiment line. After the greeting, give one sentence classifying today's overall market sentiment as "bullish", "bearish", "mixed", or "cautious", with a short reason drawn only from the articles. Example: "Overall sentiment reads cautious today — stories lean toward rate-cut uncertainty and softer consumer data." Base this only on article tone, NOT on your own market views. Do not invent data.
+2. One-sentence lead: how major indexes closed today (S&P 500, Nasdaq, TSX Composite if mentioned in the articles). Give direction and magnitude.
+3. Two or three stories that actually moved broad equity markets — macro drivers like rates, inflation, jobs data, central-bank decisions, major geopolitical events, or mega-cap earnings. For each, briefly explain WHY it matters to someone holding a diversified index ETF.
+4. If any article mentions VEQT, VFV, Vanguard Canada, or top S&P 500 constituents by name (Apple, Microsoft, Nvidia, Alphabet, Amazon, Meta, Tesla, Berkshire Hathaway), give it one or two sentences of its own.
+5. Close with one sentence on what's scheduled tomorrow that investors should note — a central bank decision, major earnings, a key data release — but ONLY if the input articles mention it. Otherwise skip this.
 
 Skip / ignore:
 - Single-stock drama unrelated to index constituents
