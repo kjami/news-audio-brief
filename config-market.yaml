@@ -7,18 +7,25 @@ feeds:
       url: https://financialpost.com/feed
       lang: en
       max_articles: 2
-    - name: BNN Bloomberg
-      url: https://www.bnnbloomberg.ca/rss.xml
+    # BNN Bloomberg's RSS is dead (the site merged into bloomberg.com/canada
+    # and the old /rss.xml now 404s). Global News Money covers similar
+    # Canadian market / personal finance territory and has a live feed.
+    - name: Global News Money
+      url: https://globalnews.ca/money/feed/
       lang: en
       max_articles: 2
 
   us_markets:
+    # MarketWatch's feed is fine, but individual story pages 401 behind
+    # Cloudflare. We fall back to the RSS summary — enough for headlines.
     - name: MarketWatch Top Stories
       url: https://feeds.content.dowjones.io/public/rss/mw_topstories
       lang: en
       max_articles: 2
-    - name: CNBC Top News
-      url: https://search.cnbc.com/rs/search/combinedcd.xml?partnerId=wrss01&id=100003114
+    # Replaced the old search.cnbc.com URL (returned 0 entries). CNBC's
+    # canonical device RSS with id=15839069 is their Business section.
+    - name: CNBC Business
+      url: https://www.cnbc.com/id/15839069/device/rss/rss.html
       lang: en
       max_articles: 2
     - name: Yahoo Finance
