@@ -1,10 +1,10 @@
 name: Daily Audio Brief
 
 on:
-  schedule:
+  # schedule:
     # 10:00 UTC daily = 6:00 AM Eastern (EDT) / 5:00 AM Eastern (EST).
     # Good enough for v1 — we don't try to follow DST precisely.
-    - cron: "0 10 * * *"
+    # - cron: "0 10 * * *"
   workflow_dispatch: {}
 
 jobs:
