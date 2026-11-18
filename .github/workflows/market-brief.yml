@@ -1,11 +1,11 @@
 name: Daily Market Brief
 
 on:
-  schedule:
+  # schedule:
     # 13:00 UTC Mon–Fri = 9:00 AM Eastern (EDT) / 8:00 AM (EST) — ~30 min
     # before US market open, so overnight + pre-market news is fresh.
     # Skips weekends since markets are closed.
-    - cron: "0 13 * * 1-5"
+    # - cron: "0 13 * * 1-5"
   workflow_dispatch: {}
 
 jobs:
